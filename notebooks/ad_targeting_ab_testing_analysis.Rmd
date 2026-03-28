@@ -1,0 +1,111 @@
+---
+title: "Yelp Case"
+author: "Aanandi Yadav"
+date: "2025-03-09"
+output: html_document
+---
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+
+# Load the dataset
+data <- read_excel("yelp.xlsx", sheet = "yelp_data")
+
+# Compute Click-Through Rate (CTR) for each group
+ctr_analysis <- data %>%
+  group_by(Treatment) %>%
+  summarise(
+    total_ads = n(),
+    total_clicks = sum(AdClick == "clicked"),
+    CTR = total_clicks / total_ads
+  )
+
+print(ctr_analysis)
+
+# Compute Sell-Through Rate (percentage of eligible ads shown)
+sell_through_analysis <- data %>%
+  group_by(Treatment) %>%
+  summarise(
+    total_eligible = sum(Eligible == "eligible"),
+    total_shown = sum(AdShown == "shown"),
+    Sell_Through_Rate = total_shown / total_eligible
+  )
+
+print(sell_through_analysis)
+
+# Compute Conversion Rate per Impression
+conversion_rate_analysis <- data %>%
+  group_by(Treatment) %>%
+  summarise(
+    total_shown = sum(AdShown == "shown"),
+    total_conversions = sum(AdClick == "clicked"),
+    Conversion_Rate = total_conversions / total_shown
+  )
+
+print(conversion_rate_analysis)
+
+# Compute Total Revenue Impact
+revenue_analysis <- data %>%
+  group_by(Treatment) %>%
+  summarise(
+    total_revenue = sum(Revenue)
+  )
+
+print(revenue_analysis)
+
+# Conduct a t-test to check statistical significance of revenue difference
+t_test_revenue <- t.test(Revenue ~ Treatment, data = data)
+print(t_test_revenue)
+
+library(ggplot2)
+
+# Compute daily revenue per treatment group
+daily_revenue <- data %>%
+  group_by(Date, Treatment) %>%
+  summarise(daily_revenue = sum(Revenue))
+
+# Plot daily revenue trends
+ggplot(daily_revenue, aes(x = Date, y = daily_revenue, color = Treatment)) +
+  geom_line(size = 1) +
+  labs(title = "Daily Revenue Trend by Treatment Group", x = "Date", y = "Revenue") +
+  theme_minimal()
+  
+# Compute CTR by Device Type
+ctr_device_analysis <- data %>%
+  group_by(Treatment, Desktop) %>%
+  summarise(
+    total_ads = n(),
+    total_clicks = sum(AdClick == "clicked"),
+    CTR = total_clicks / total_ads
+  )
+
+print(ctr_device_analysis)
+
+# Compute CTR by Local Service Type
+ctr_local_service <- data %>%
+  group_by(Treatment, LocalService) %>%
+  summarise(
+    total_ads = n(),
+    total_clicks = sum(AdClick == "clicked"),
+    CTR = total_clicks / total_ads
+  )
+
+print(ctr_local_service)
+
+install.packages("pwr")  # Reminding Myself to Only Run this once!
+library(pwr)
+
+# CTR values from dataset
+ctr_control <- 0.680  # CTR in control group
+ctr_treatment <- 0.603  # CTR in treatment group
+sample_size <- 87365  # Observations per group
+
+# Compute effect size for proportions (Cohen's h)
+effect_size_ctr <- ES.h(p1 = ctr_control, p2 = ctr_treatment)
+
+# Power analysis for proportions
+power_ctr <- pwr.2p.test(h = effect_size_ctr, n = sample_size, sig.level = 0.05, power = NULL)
+
+# Print result
+print(power_ctr)
+
