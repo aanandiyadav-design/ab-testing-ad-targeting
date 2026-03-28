@@ -1,0 +1,138 @@
+---
+title: "Ad Targeting A/B Testing Analysis Outputs"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(tidyr)
+
+# Load data
+data <- read_excel("yelp.xlsx", sheet = "yelp_data")
+```
+
+## Revenue Trend
+
+```{r revenue-trend, fig.width=8, fig.height=5, message=FALSE, warning=FALSE}
+daily_revenue <- data %>%
+  group_by(Date, Treatment) %>%
+  summarise(daily_revenue = sum(Revenue), .groups = "drop")
+
+p_revenue <- ggplot(daily_revenue, aes(x = Date, y = daily_revenue, color = Treatment)) +
+  geom_line(linewidth = 1.1) +
+  scale_color_manual(values = c("control" = "#E9A8C6", "treatment" = "#C9B6E4")) +
+  labs(
+    title = "Daily Revenue Trend by Treatment Group",
+    x = "Date",
+    y = "Revenue",
+    color = "Group"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+p_revenue
+ggsave("revenue_trend.png", plot = p_revenue, width = 8, height = 5, dpi = 300)
+```
+
+## Metrics Comparison
+
+```{r metrics-comparison, fig.width=8, fig.height=5, message=FALSE, warning=FALSE}
+metrics <- tibble(
+  Metric = rep(c("CTR", "STR", "Conversion Rate"), each = 2),
+  Treatment = rep(c("Control", "Treatment"), times = 3),
+  Value = c(
+    0.680, 0.603,   # CTR
+    0.943, 0.740,   # STR
+    0.759, 0.857    # Conversion Rate
+  )
+)
+
+p_metrics <- ggplot(metrics, aes(x = Metric, y = Value, fill = Treatment, group = Treatment)) +
+  geom_col(position = position_dodge(width = 0.72), width = 0.64) +
+  geom_line(
+    aes(
+      x = c(1 - 0.18, 2 - 0.18, 3 - 0.18)[match(Metric, c("CTR", "STR", "Conversion Rate"))]
+    ),
+    data = metrics %>% filter(Treatment == "Control"),
+    color = "#E9A8C6",
+    linewidth = 1
+  ) +
+  geom_point(
+    aes(
+      x = c(1 - 0.18, 2 - 0.18, 3 - 0.18)[match(Metric, c("CTR", "STR", "Conversion Rate"))]
+    ),
+    data = metrics %>% filter(Treatment == "Control"),
+    color = "#E9A8C6",
+    size = 2.5
+  ) +
+  geom_line(
+    aes(
+      x = c(1 + 0.18, 2 + 0.18, 3 + 0.18)[match(Metric, c("CTR", "STR", "Conversion Rate"))]
+    ),
+    data = metrics %>% filter(Treatment == "Treatment"),
+    color = "#C9B6E4",
+    linewidth = 1
+  ) +
+  geom_point(
+    aes(
+      x = c(1 + 0.18, 2 + 0.18, 3 + 0.18)[match(Metric, c("CTR", "STR", "Conversion Rate"))]
+    ),
+    data = metrics %>% filter(Treatment == "Treatment"),
+    color = "#C9B6E4",
+    size = 2.5
+  ) +
+  geom_text(
+    aes(label = percent(Value, accuracy = 0.1)),
+    position = position_dodge(width = 0.72),
+    vjust = -0.4,
+    size = 3.8
+  ) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1),
+    limits = c(0, 1)
+  ) +
+  scale_fill_manual(values = c("Control" = "#E9A8C6", "Treatment" = "#C9B6E4")) +
+  labs(
+    title = "Control vs Treatment Across Key Metrics",
+    x = NULL,
+    y = "Percent",
+    fill = "Group"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+p_metrics
+ggsave("metrics_comparison.png", plot = p_metrics, width = 8, height = 5, dpi = 300)
+```
+
+## Revenue Significance Test
+
+```{r revenue-t-test, message=FALSE, warning=FALSE}
+t_test_revenue <- t.test(Revenue ~ Treatment, data = data)
+t_test_revenue
+```
+
+## Power Analysis for CTR
+
+```{r ctr-power-analysis, message=FALSE, warning=FALSE}
+library(pwr)
+
+ctr_control <- 0.680
+ctr_treatment <- 0.603
+sample_size <- 87365
+
+effect_size_ctr <- ES.h(p1 = ctr_control, p2 = ctr_treatment)
+power_ctr <- pwr.2p.test(h = effect_size_ctr, n = sample_size, sig.level = 0.05)
+
+effect_size_ctr
+power_ctr
+```
