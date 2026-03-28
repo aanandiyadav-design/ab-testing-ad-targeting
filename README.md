@@ -1,102 +1,77 @@
 # Ad Targeting A/B Testing Analysis
 
-![R](https://img.shields.io/badge/R-276DC3?style=flat&logo=r&logoColor=white)
-![dplyr](https://img.shields.io/badge/dplyr-1a1a2e?style=flat)
-![ggplot2](https://img.shields.io/badge/ggplot2-1a1a2e?style=flat)
-![Method](https://img.shields.io/badge/Method-A%2FB%20Experiment-2d6a4f?style=flat)
-![Stats](https://img.shields.io/badge/Stats-Welch%20t--test%20%7C%20Power%20Analysis-2d6a4f?style=flat)
-
-Evaluating the monetization and engagement tradeoffs of geographic ad constraints using a two-arm randomized experiment.
-
----
-
 ## Key Results
 
-| Metric | Control | Treatment | Δ Change |
-|---|---|---|---|
-| Click-Through Rate | 68.0% | 60.3% | ▼ −7.7 pp |
-| Conversion Rate | 75.9% | 85.7% | ▲ +9.8 pp |
-| Sell-Through Rate | 94.3% | 74.0% | ▼ −20.3 pp |
-| Total Revenue | — | — | ▼ −15.7% *(significant)* |
-
-> **Bottom line:** Geographic targeting constraints improved conversion quality but reduced click volume and auction competition enough to cause a statistically significant 15.7% revenue decline.
+- Enforcing geographic constraints reduced click-through rate from 68.0% to 60.3%, lowering total engagement under the treatment condition  
+- Conversion rate increased from 75.9% to 85.7%, indicating improved alignment between users and displayed ads  
+- Sell-through rate declined from 94.3% to 74.0%, reflecting a reduction in eligible ad inventory  
+- Total revenue decreased by 15.7%, driven by reduced click volume despite higher conversion efficiency  
+- Statistical testing confirmed the revenue decline was significant, with sufficient power to detect the observed CTR effect  
 
 ---
 
-## Overview
+This project evaluates how restricting the set of ads shown to users affects engagement, conversion behavior, and revenue outcomes. The analysis is framed as an A/B experiment comparing a baseline system against a constrained version where ads are limited to a narrower geographic range. 
 
-This project evaluates how restricting the set of ads shown to users affects engagement, conversion behavior, and revenue outcomes. The analysis compares a baseline ad system against a treatment condition where ads are limited to a narrower geographic range — a common product decision in ad platforms.
+The goal was to understand how changes to system design impact both user behavior and monetization. In practice, this reflects a common product decision problem: whether stricter targeting improves outcome quality without reducing overall engagement and revenue.
 
-The core question: *does stricter targeting improve outcome quality without sacrificing revenue at scale?*
+The analysis was implemented in R using `dplyr` for transformation and aggregation, `ggplot2` for visualization, and statistical testing libraries for inference. Metrics were computed at the treatment level to ensure consistent comparisons across control and constrained conditions.
 
----
-
-## Implementation
-
-### Unified KPI Aggregation
-
-All metrics were computed in a single `dplyr` pipeline to ensure internal consistency across engagement and monetization measures:
+A unified aggregation pipeline was used to compute all key performance metrics:
 
 ```r
 metrics_summary <- data %>%
   mutate(
-    click_flag    = AdClick  == "clicked",
+    click_flag = AdClick == "clicked",
     purchase_flag = Purchase == "yes"
   ) %>%
   group_by(Treatment) %>%
   summarise(
-    impressions             = n(),
-    clicks                  = sum(click_flag),
-    purchases               = sum(purchase_flag),
-    revenue                 = sum(Revenue),
-    CTR                     = clicks / impressions,
-    conversion_rate         = purchases / clicks,
-    STR                     = impressions / max(impressions),
-    revenue_per_impression  = revenue / impressions
+    impressions = n(),
+    clicks = sum(click_flag),
+    purchases = sum(purchase_flag),
+    revenue = sum(Revenue),
+    CTR = clicks / impressions,
+    conversion_rate = purchases / clicks,
+    STR = impressions / max(impressions),
+    revenue_per_impression = revenue / impressions
   )
 ```
 
-### Significance Testing & Power Analysis
+This structure allows all key metrics to be computed in a single pass, ensuring internal consistency across engagement and monetization measures.
 
-Revenue impact was assessed with a **Welch t-test** (robust to unequal group variance), followed by power analysis to confirm the experiment was adequately sized to detect the observed CTR effect:
+Revenue impact was evaluated using a Welch t-test to account for unequal variance between treatment groups:
 
 ```r
-# Revenue significance
 t_test_revenue <- t.test(Revenue ~ Treatment, data = data)
+```
 
-# Cohen's h effect size for CTR (proportion comparison)
+Effect size and statistical power were then computed to validate that the observed differences were detectable given the experiment size:
+
+```r
 effect_size_ctr <- ES.h(
   p1 = metrics_summary$CTR[metrics_summary$Treatment == "control"],
   p2 = metrics_summary$CTR[metrics_summary$Treatment == "treatment"]
 )
 
-# Verify sufficient statistical power
 power_analysis <- pwr.2p.test(
-  h         = effect_size_ctr,
-  n         = min(table(data$Treatment)),
+  h = effect_size_ctr,
+  n = min(table(data$Treatment)),
   sig.level = 0.05
 )
 ```
 
----
+Restricting the ad pool reduced the number of eligible impressions, directly lowering click volume. While the remaining ads were more relevant and converted at higher rates, the reduction in exposure dominated overall performance. This indicates that user engagement is not strictly bounded by geographic proximity and that users consider nearby alternatives when other attributes are favorable.
 
-## Findings
+Revenue outcomes were driven primarily by scale. Under a pay-per-click model, total clicks contributed more to revenue than improvements in conversion efficiency. The decline in sell-through rate reflects reduced participation in the ad auction, limiting both competition and monetization potential.
 
-**User behavior:** The CTR decline under geographic restriction indicates users engage with nearby-but-not-proximate ads when other attributes are favorable — proximity alone is not a binding constraint on purchase intent.
-
-**Revenue mechanics:** Under a pay-per-click model, click volume drives revenue more than conversion efficiency. A 9.8 pp conversion rate lift was insufficient to offset the 7.7 pp CTR decline at scale.
-
-**Auction dynamics:** A 20 pp drop in sell-through rate signals reduced auction competition. Fewer eligible advertisers suppress clearing prices and constrain fill — a compounding monetization risk beyond the direct click loss.
-
-**Takeaway:** Tightening geographic targeting is not advisable without a compensating mechanism — such as expanded inventory sourcing or a hybrid relevance scoring model — to maintain monetizable reach. System performance depends on balancing relevance against volume rather than optimizing either in isolation.
+The results highlight a core tradeoff between relevance and volume. Increasing targeting precision improves conversion efficiency but reduces the number of monetizable interactions. Effective system design requires balancing these effects rather than optimizing for a single metric.
 
 ---
 
-## Tech Stack
+## Outputs
 
-| Area | Tools |
-|---|---|
-| Data transformation | R, dplyr |
-| Visualization | ggplot2 |
-| Statistical inference | Welch t-test, Cohen's h, `pwr` package |
-| Experiment design | Two-arm A/B test, treatment-level aggregation |
+**Daily Revenue Trend (Control vs Treatment)**  
+![Revenue Trend](outputs/revenue_trend.png)
+
+**CTR, STR, and Conversion Comparison**  
+![Metrics Comparison](outputs/metrics_comparison.png)
